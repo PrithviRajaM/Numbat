@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "NumbatUI",
+    "slug": "numbatui",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "numbatui",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#143200"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.teamglobalexp.numbatui"
+    },
+    "android": {
+      "package": "com.teamglobalexp.numbatui",
+      "adaptiveIcon": {
+        "backgroundColor": "#143200"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
