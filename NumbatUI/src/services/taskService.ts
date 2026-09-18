@@ -38,6 +38,11 @@ export type SaveTaskResult = {
   created?: boolean;
 };
 
+export type RunTaskResult = {
+  success: boolean;
+  message: string;
+};
+
 export type ListTasksResult = {
   success: boolean;
   message: string;
@@ -57,7 +62,9 @@ export interface TaskService {
     email: string,
     config: TaskConfig,
     prompt: string,
+    createOnly?: boolean,
   ): Promise<SaveTaskResult>;
+  runNow(email: string, name: string): Promise<RunTaskResult>;
 }
 
 type ErrorResponse = { detail?: string };
@@ -119,6 +126,7 @@ export class HttpTaskService implements TaskService {
     email: string,
     config: TaskConfig,
     prompt: string,
+    createOnly = false,
   ): Promise<SaveTaskResult> {
     let response: Response;
     try {
@@ -128,7 +136,7 @@ export class HttpTaskService implements TaskService {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({ email, config, prompt }),
+        body: JSON.stringify({ email, config, prompt, create_only: createOnly }),
       });
     } catch {
       return { success: false, message: 'Cannot reach the server.' };
@@ -151,6 +159,35 @@ export class HttpTaskService implements TaskService {
       message: data.message,
       name: data.name,
       created: data.created,
+    };
+  }
+
+  async runNow(email: string, name: string): Promise<RunTaskResult> {
+    let response: Response;
+    try {
+      response = await fetch(
+        `${this.baseUrl}/tasks/${encodeURIComponent(name)}/run`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ email }),
+        },
+      );
+    } catch {
+      return { success: false, message: 'Cannot reach the server.' };
+    }
+
+    if (!response.ok) {
+      return { success: false, message: await errorDetail(response) };
+    }
+
+    const data = await safeJson<{ message: string }>(response);
+    return {
+      success: true,
+      message: data?.message ?? 'Run requested.',
     };
   }
 }
@@ -189,10 +226,17 @@ export class MockTaskService implements TaskService {
     email: string,
     config: TaskConfig,
     prompt: string,
+    createOnly = false,
   ): Promise<SaveTaskResult> {
     await delay(250);
     const bucket = this.bucket(email);
     const created = !bucket.has(config.name);
+    if (createOnly && !created) {
+      return {
+        success: false,
+        message: `A task named '${config.name}' already exists`,
+      };
+    }
     bucket.set(config.name, { config, prompt });
     return {
       success: true,
@@ -202,6 +246,11 @@ export class MockTaskService implements TaskService {
       name: config.name,
       created,
     };
+  }
+
+  async runNow(_email: string, name: string): Promise<RunTaskResult> {
+    await delay(150);
+    return { success: true, message: `Run requested for '${name}' (mock)` };
   }
 }
 

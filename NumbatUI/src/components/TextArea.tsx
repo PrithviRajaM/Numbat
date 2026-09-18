@@ -35,7 +35,7 @@ export function TextArea({
       <TextInput
         style={[
           styles.input,
-          { minHeight: rows * 22 + spacing.md * 2 },
+          { minHeight: rows * 20 + spacing.sm * 2 },
           hasError && styles.inputError,
           !editable && styles.inputDisabled,
         ]}
@@ -69,12 +69,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: fontSizes.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    fontSize: fontSizes.sm,
     color: colors.textOnLight,
     backgroundColor: colors.surface,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   inputError: {
     borderColor: colors.danger,

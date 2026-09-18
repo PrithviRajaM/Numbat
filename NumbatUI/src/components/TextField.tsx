@@ -20,6 +20,8 @@ type TextFieldProps = {
   autoComplete?: 'email' | 'off';
   onSubmitEditing?: () => void;
   editable?: boolean;
+  /** When true, render the label and input side-by-side on one line. */
+  horizontal?: boolean;
 };
 
 /**
@@ -38,27 +40,44 @@ export function TextField({
   autoComplete = 'off',
   onSubmitEditing,
   editable = true,
+  horizontal = false,
 }: TextFieldProps) {
   const hasError = Boolean(error);
+
+  const input = (
+    <TextInput
+      style={[styles.input, hasError && styles.inputError, !editable && styles.inputDisabled]}
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={colors.textMuted}
+      keyboardType={keyboardType}
+      autoCapitalize={autoCapitalize}
+      autoComplete={autoComplete}
+      autoCorrect={false}
+      editable={editable}
+      onSubmitEditing={onSubmitEditing}
+      accessibilityLabel={label}
+      returnKeyType="go"
+    />
+  );
+
+  if (horizontal) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.rowContainer}>
+          <Text style={[styles.label, styles.labelInline]}>{label}</Text>
+          <View style={styles.rowInput}>{input}</View>
+        </View>
+        {hasError ? <Text style={styles.errorText}>{error}</Text> : null}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={[styles.input, hasError && styles.inputError, !editable && styles.inputDisabled]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize}
-        autoComplete={autoComplete}
-        autoCorrect={false}
-        editable={editable}
-        onSubmitEditing={onSubmitEditing}
-        accessibilityLabel={label}
-        returnKeyType="go"
-      />
+      {input}
       {hasError ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
@@ -74,15 +93,27 @@ const styles = StyleSheet.create({
     color: colors.textOnLight,
     marginBottom: spacing.xs,
   },
+  rowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  labelInline: {
+    marginBottom: 0,
+    width: 120,
+  },
+  rowInput: {
+    flex: 1,
+  },
   input: {
     width: '100%',
-    minHeight: 48,
+    minHeight: 38,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSizes.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    fontSize: fontSizes.sm,
     color: colors.textOnLight,
     backgroundColor: colors.surface,
   },

@@ -23,7 +23,7 @@ type HomeScreenProps = {
  * On success it hands the email up so the app can show the Tasks screen.
  */
 export function HomeScreen({ onLoggedIn }: HomeScreenProps) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('pm@teamglobalexp.com');
   const [fieldError, setFieldError] = useState<string>('');
   const [status, setStatus] = useState<{ kind: StatusKind; message: string }>({
     kind: 'idle',
@@ -137,13 +137,13 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: colors.brandGreenDeep,
     alignItems: 'center',
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xl,
   },
   heroInner: {
     width: '100%',
     maxWidth: layout.maxContentWidth,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
     alignItems: 'center',
   },
   eyebrow: {
@@ -151,15 +151,15 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     fontWeight: '700',
     letterSpacing: 1.5,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
     textAlign: 'center',
   },
   card: {
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 400,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    padding: spacing.lg,
     // Soft elevation that works across platforms.
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -168,13 +168,13 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   cardTitle: {
-    fontSize: fontSizes.lg,
+    fontSize: fontSizes.md,
     fontWeight: '800',
     color: colors.textOnLight,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   fieldSpacing: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   loginButton: {
     width: '100%',

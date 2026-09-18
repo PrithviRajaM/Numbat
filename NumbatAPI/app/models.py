@@ -61,6 +61,13 @@ class SaveTaskRequest(BaseModel):
     email: EmailStr
     config: TaskConfig
     prompt: str = Field(default="", description="Multiline task prompt text.")
+    create_only: bool = Field(
+        default=False,
+        description=(
+            "When true, the request is a create: it fails if a task with the "
+            "same name already exists."
+        ),
+    )
 
 
 class TaskSummary(BaseModel):
@@ -89,3 +96,52 @@ class SaveTaskResponse(BaseModel):
     message: str
     name: str
     created: bool
+
+
+class RunTaskRequest(BaseModel):
+    """Request to trigger an immediate run of a task."""
+
+    email: EmailStr
+
+
+class RunTaskResponse(BaseModel):
+    """Acknowledgement that a run request was received."""
+
+    message: str
+    name: str
+
+
+class LogRun(BaseModel):
+    """A single task run within a log file.
+
+    A run groups all log lines that share the same ``task_run_id`` (the number
+    inside the second pair of square brackets on each line). ``start_time`` is
+    the timestamp of the first line belonging to the run.
+    """
+
+    task_run_id: int = Field(..., description="Run id parsed from the log line.")
+    start_time: str = Field(..., description="Timestamp of the run's first line.")
+
+
+class LogDate(BaseModel):
+    """All runs found inside one log file (one file per date)."""
+
+    date: str = Field(..., description="Log date, parsed from the filename (YYYY-MM-DD).")
+    runs: list[LogRun] = Field(
+        default_factory=list,
+        description="Runs in the file, sorted newest to oldest.",
+    )
+
+
+class LogRunListResponse(BaseModel):
+    """Lightweight listing: dates and their runs (no log lines)."""
+
+    dates: list[LogDate] = Field(default_factory=list)
+
+
+class LogLinesResponse(BaseModel):
+    """The raw log lines for a single run, oldest to newest as written."""
+
+    date: str
+    task_run_id: int
+    lines: list[str] = Field(default_factory=list)

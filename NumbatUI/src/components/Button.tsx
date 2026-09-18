@@ -63,9 +63,9 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    minHeight: 38,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   label: {
-    fontSize: fontSizes.md,
+    fontSize: fontSizes.sm,
     fontWeight: '700',
   },
   labelPrimary: {

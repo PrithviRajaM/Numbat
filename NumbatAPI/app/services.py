@@ -2,13 +2,26 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from .config import settings
-from .models import TaskConfig, TaskDetailResponse, TaskSummary
+from .models import (
+    LogDate,
+    LogRun,
+    TaskConfig,
+    TaskDetailResponse,
+    TaskSummary,
+)
 
 CONFIG_FILENAME = "TaskConfig.json"
 PROMPT_FILENAME = "TaskPrompt.txt"
+LOGS_DIRNAME = "Logs"
+
+# Log filenames look like ``task_2026-09-10.log``; capture the date part.
+_LOG_FILENAME_RE = re.compile(r"^task_(\d{4}-\d{2}-\d{2})\.log$", re.IGNORECASE)
+# A log line starts with ``HH:MM:SS [<run_id>] ...``; capture time and run id.
+_LOG_LINE_RE = re.compile(r"^(\d{2}:\d{2}:\d{2})\s+\[(\d+)\]")
 
 
 class DomainNotAllowedError(Exception):
@@ -21,6 +34,14 @@ class ProfileNotFoundError(Exception):
 
 class TaskNotFoundError(Exception):
     """Raised when a requested task does not exist for the user."""
+
+
+class LogRunNotFoundError(Exception):
+    """Raised when a requested log date/run cannot be found for a task."""
+
+
+class TaskExistsError(Exception):
+    """Raised when creating a task whose name is already taken."""
 
 
 def validate_domain(email: str) -> str:
@@ -149,11 +170,20 @@ def get_task(email: str, task_name: str) -> TaskDetailResponse:
     return TaskDetailResponse(config=config, prompt=prompt)
 
 
-def save_task(email: str, config: TaskConfig, prompt: str) -> tuple[str, bool]:
+def save_task(
+    email: str,
+    config: TaskConfig,
+    prompt: str,
+    create_only: bool = False,
+) -> tuple[str, bool]:
     """Create or update a task for the user.
 
     Writes ``TaskConfig.json`` and ``TaskPrompt.txt`` inside a folder named
     after the task, under ``<profile>/Tasks``.
+
+    Args:
+        create_only: When True, refuse to overwrite an existing task and raise
+            ``TaskExistsError`` instead.
 
     Returns:
         A tuple of (task_name, created) where ``created`` is True when the
@@ -161,6 +191,7 @@ def save_task(email: str, config: TaskConfig, prompt: str) -> tuple[str, bool]:
 
     Raises:
         ProfileNotFoundError: If the user's profile folder is missing.
+        TaskExistsError: If ``create_only`` is True and the task already exists.
     """
     profile_dir = _profile_dir(email)
     if not profile_dir.exists():
@@ -168,6 +199,8 @@ def save_task(email: str, config: TaskConfig, prompt: str) -> tuple[str, bool]:
 
     task_dir = _tasks_root(email) / config.name
     created = not task_dir.exists()
+    if create_only and not created:
+        raise TaskExistsError(f"A task named '{config.name}' already exists")
     task_dir.mkdir(parents=True, exist_ok=True)
 
     config_path = task_dir / CONFIG_FILENAME
@@ -180,3 +213,147 @@ def save_task(email: str, config: TaskConfig, prompt: str) -> tuple[str, bool]:
     prompt_path.write_text(prompt, encoding="utf-8")
 
     return config.name, created
+
+
+def run_task(email: str, task_name: str) -> str:
+    """Handle an immediate 'run now' request for a task.
+
+    For now this just prints the received request and returns the task name;
+    real execution will be wired up later.
+
+    Raises:
+        ProfileNotFoundError: If the user's profile folder is missing.
+        TaskNotFoundError: If the task folder or its config is missing.
+    """
+    profile_dir = _profile_dir(email)
+    if not profile_dir.exists():
+        raise ProfileNotFoundError(f"No profile found for {email}")
+
+    task_dir = _tasks_root(email) / task_name
+    if not (task_dir / CONFIG_FILENAME).exists():
+        raise TaskNotFoundError(f"Task '{task_name}' not found")
+
+    print(f"[run_task] Run Now requested: email={email!r} task={task_name!r}")
+    return task_name
+
+
+def _logs_dir(email: str, task_name: str) -> Path:
+    """Return the ``Logs`` folder inside a task's folder.
+
+    Raises:
+        ProfileNotFoundError: If the user's profile folder is missing.
+        TaskNotFoundError: If the task folder is missing.
+    """
+    profile_dir = _profile_dir(email)
+    if not profile_dir.exists():
+        raise ProfileNotFoundError(f"No profile found for {email}")
+
+    task_dir = _tasks_root(email) / task_name
+    if not task_dir.exists():
+        raise TaskNotFoundError(f"Task '{task_name}' not found")
+
+    return task_dir / LOGS_DIRNAME
+
+
+def _parse_line(line: str) -> tuple[str, int] | None:
+    """Return ``(time, run_id)`` for a log line, or None if it doesn't match."""
+    match = _LOG_LINE_RE.match(line)
+    if not match:
+        return None
+    return match.group(1), int(match.group(2))
+
+
+def list_log_runs(email: str, task_name: str) -> list[LogDate]:
+    """List log files (by date) and the runs inside each, without log lines.
+
+    For every ``task_<date>.log`` in the task's ``Logs`` folder, the file is
+    scanned once to discover distinct ``task_run_id`` values and the start time
+    of each run (the timestamp of the run's first line).
+
+    Dates are returned newest-to-oldest, and runs within a date are also sorted
+    newest-to-oldest by run id.
+
+    Returns an empty list when the ``Logs`` folder does not exist.
+
+    Raises:
+        ProfileNotFoundError: If the user's profile folder is missing.
+        TaskNotFoundError: If the task folder is missing.
+    """
+    logs_dir = _logs_dir(email, task_name)
+    if not logs_dir.exists():
+        return []
+
+    dates: list[LogDate] = []
+    for entry in logs_dir.iterdir():
+        if not entry.is_file():
+            continue
+        name_match = _LOG_FILENAME_RE.match(entry.name)
+        if not name_match:
+            continue
+
+        date = name_match.group(1)
+        # Preserve run discovery order but keep the first-seen start time.
+        first_seen: dict[int, str] = {}
+        try:
+            with entry.open("r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    parsed = _parse_line(line)
+                    if parsed is None:
+                        continue
+                    time_str, run_id = parsed
+                    if run_id not in first_seen:
+                        first_seen[run_id] = time_str
+        except OSError:
+            # Skip unreadable files rather than failing the whole listing.
+            continue
+
+        runs = [
+            LogRun(task_run_id=run_id, start_time=time_str)
+            for run_id, time_str in first_seen.items()
+        ]
+        runs.sort(key=lambda r: r.task_run_id, reverse=True)
+        dates.append(LogDate(date=date, runs=runs))
+
+    dates.sort(key=lambda d: d.date, reverse=True)
+    return dates
+
+
+def get_log_run_lines(
+    email: str, task_name: str, date: str, task_run_id: int
+) -> list[str]:
+    """Return all log lines for a single run, oldest-to-newest as written.
+
+    Lines are returned exactly as they appear in the file (with trailing
+    newlines stripped), preserving their original order.
+
+    Raises:
+        ProfileNotFoundError: If the user's profile folder is missing.
+        TaskNotFoundError: If the task folder is missing.
+        LogRunNotFoundError: If the log file for the date is missing or the run
+            id is not present in it.
+    """
+    logs_dir = _logs_dir(email, task_name)
+    log_path = logs_dir / f"task_{date}.log"
+    if not log_path.exists():
+        raise LogRunNotFoundError(f"No log file for date '{date}'")
+
+    lines: list[str] = []
+    try:
+        with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                parsed = _parse_line(line)
+                if parsed is None:
+                    continue
+                if parsed[1] == task_run_id:
+                    lines.append(line.rstrip("\n"))
+    except OSError as exc:
+        raise LogRunNotFoundError(
+            f"Unable to read log file for date '{date}'"
+        ) from exc
+
+    if not lines:
+        raise LogRunNotFoundError(
+            f"Run '{task_run_id}' not found in log for date '{date}'"
+        )
+
+    return lines

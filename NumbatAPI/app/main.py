@@ -10,8 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .models import (
+    LogLinesResponse,
+    LogRunListResponse,
     ProfileRequest,
     ProfileResponse,
+    RunTaskRequest,
+    RunTaskResponse,
     SaveTaskRequest,
     SaveTaskResponse,
     TaskDetailResponse,
@@ -19,11 +23,16 @@ from .models import (
 )
 from .services import (
     DomainNotAllowedError,
+    LogRunNotFoundError,
     ProfileNotFoundError,
+    TaskExistsError,
     TaskNotFoundError,
+    get_log_run_lines,
     get_task,
+    list_log_runs,
     list_tasks,
     process_profile,
+    run_task,
     save_task,
 )
 
@@ -116,10 +125,15 @@ def create_or_update_task(payload: SaveTaskRequest) -> SaveTaskResponse:
     """
     try:
         name, created = save_task(
-            str(payload.email), payload.config, payload.prompt
+            str(payload.email),
+            payload.config,
+            payload.prompt,
+            create_only=payload.create_only,
         )
     except DomainNotAllowedError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except TaskExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ProfileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -127,3 +141,73 @@ def create_or_update_task(payload: SaveTaskRequest) -> SaveTaskResponse:
         f"Task '{name}' created" if created else f"Task '{name}' updated"
     )
     return SaveTaskResponse(message=message, name=name, created=created)
+
+
+@app.post("/tasks/{task_name}/run", response_model=RunTaskResponse)
+def run_task_now(task_name: str, payload: RunTaskRequest) -> RunTaskResponse:
+    """Trigger an immediate run of a task.
+
+    For now the backend simply prints the received request; actual execution
+    will be added later.
+
+    - 400 if the email domain is not allowed.
+    - 404 if the profile or task does not exist.
+    """
+    try:
+        name = run_task(str(payload.email), task_name)
+    except DomainNotAllowedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (ProfileNotFoundError, TaskNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return RunTaskResponse(message=f"Run requested for '{name}'", name=name)
+
+
+@app.get("/tasks/{task_name}/logs", response_model=LogRunListResponse)
+def get_task_log_runs(task_name: str, email: str) -> LogRunListResponse:
+    """List a task's log dates and the runs within each (no log lines).
+
+    This is the lightweight endpoint the UI calls first to render the
+    collapsible date -> run tree. Log lines are fetched separately per run.
+
+    - `email`: the owning user (query parameter).
+    - 400 if the email domain is not allowed.
+    - 404 if the profile or task does not exist.
+    """
+    try:
+        dates = list_log_runs(email, task_name)
+    except DomainNotAllowedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (ProfileNotFoundError, TaskNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return LogRunListResponse(dates=dates)
+
+
+@app.get(
+    "/tasks/{task_name}/logs/{date}/{task_run_id}",
+    response_model=LogLinesResponse,
+)
+def get_task_log_run_lines(
+    task_name: str, date: str, task_run_id: int, email: str
+) -> LogLinesResponse:
+    """Return all log lines for a single run, oldest-to-newest.
+
+    - `email`: the owning user (query parameter).
+    - `date`: the log date (YYYY-MM-DD) that identifies the log file.
+    - `task_run_id`: the run whose lines to return.
+    - 400 if the email domain is not allowed.
+    - 404 if the profile, task, log file, or run does not exist.
+    """
+    try:
+        lines = get_log_run_lines(email, task_name, date, task_run_id)
+    except DomainNotAllowedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (
+        ProfileNotFoundError,
+        TaskNotFoundError,
+        LogRunNotFoundError,
+    ) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return LogLinesResponse(date=date, task_run_id=task_run_id, lines=lines)
