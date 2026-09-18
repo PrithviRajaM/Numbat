@@ -17,7 +17,6 @@ import { TextField } from '@/components/TextField';
 import {
   TaskConfig,
   TaskSummary,
-  WebAccessMode,
   taskService,
 } from '@/services/taskService';
 import { colors, fontSizes, radius, spacing } from '@/theme';
@@ -30,17 +29,11 @@ type TasksScreenProps = {
   email: string;
 };
 
-const WEB_ACCESS_OPTIONS: { label: string; value: WebAccessMode }[] = [
-  { label: 'Web through MCP', value: 'web_through_mcp' },
-  { label: 'Direct', value: 'direct' },
-  { label: 'No web', value: 'no_web' },
-];
-
 const EMPTY_FORM = {
   name: '',
   frequency: '1',
   enabled: true,
-  webAccessMode: 'web_through_mcp' as WebAccessMode,
+  webAccess: false,
   prompt: '',
 };
 
@@ -114,7 +107,7 @@ export function TasksScreen({ email }: TasksScreenProps) {
         name: config.name,
         frequency: String(config.frequency_in_minutes),
         enabled: config.enabled,
-        webAccessMode: config.web_access_mode,
+        webAccess: config.web_access,
         prompt,
       });
     } else {
@@ -137,7 +130,7 @@ export function TasksScreen({ email }: TasksScreenProps) {
       name: form.name.trim(),
       frequency_in_minutes: Number(form.frequency.trim()),
       enabled: form.enabled,
-      web_access_mode: form.webAccessMode,
+      web_access: form.webAccess,
     };
 
     // When no task is selected we are creating: ask the backend to reject a
@@ -351,34 +344,15 @@ export function TasksScreen({ email }: TasksScreenProps) {
                   />
                 </View>
 
-                <View style={[styles.fieldSpacing, styles.webAccessRow]}>
-                  <Text style={[styles.switchLabel, styles.webAccessLabel]}>
-                    Web access mode
-                  </Text>
-                  <View style={[styles.segment, styles.webAccessSegment]}>
-                    {WEB_ACCESS_OPTIONS.map((opt) => {
-                      const active = form.webAccessMode === opt.value;
-                      return (
-                        <Pressable
-                          key={opt.value}
-                          onPress={() => update('webAccessMode', opt.value)}
-                          disabled={saving}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: active }}
-                          style={[styles.segmentItem, active && styles.segmentItemActive]}
-                        >
-                          <Text
-                            style={[
-                              styles.segmentText,
-                              active && styles.segmentTextActive,
-                            ]}
-                          >
-                            {opt.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                <View style={[styles.fieldSpacing, styles.switchRow]}>
+                  <Text style={styles.switchLabel}>Web Access</Text>
+                  <Switch
+                    value={form.webAccess}
+                    onValueChange={(v) => update('webAccess', v)}
+                    disabled={saving}
+                    trackColor={{ true: colors.brandLime, false: colors.border }}
+                    thumbColor={colors.surface}
+                  />
                 </View>
               </View>
 
@@ -662,44 +636,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textOnLight,
     marginBottom: spacing.xs,
-  },
-  webAccessRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  webAccessLabel: {
-    marginBottom: 0,
-    width: 120,
-  },
-  webAccessSegment: {
-    flex: 1,
-  },
-  segment: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  segmentItem: {
-    flex: 1,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-  },
-  segmentItemActive: {
-    backgroundColor: colors.brandLime,
-  },
-  segmentText: {
-    fontSize: fontSizes.xs,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  segmentTextActive: {
-    color: colors.brandGreenDark,
   },
   status: {
     marginTop: spacing.sm,

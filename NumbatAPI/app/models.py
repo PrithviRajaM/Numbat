@@ -1,8 +1,6 @@
 """Pydantic request/response models for the API."""
 from __future__ import annotations
 
-from enum import Enum
-
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -18,14 +16,6 @@ class ProfileResponse(BaseModel):
     message: str
     email: str
     created: bool
-
-
-class WebAccessMode(str, Enum):
-    """Supported web access strategies for a task."""
-
-    WEB_THROUGH_MCP = "web_through_mcp"
-    NO_WEB = "no_web"
-    DIRECT = "direct"
 
 
 # Task names become folder names, so keep them filesystem-safe.
@@ -49,9 +39,9 @@ class TaskConfig(BaseModel):
         description="How often the task runs, in minutes.",
     )
     enabled: bool = Field(default=True, description="Whether the task is active.")
-    web_access_mode: WebAccessMode = Field(
-        default=WebAccessMode.WEB_THROUGH_MCP,
-        description="How the task accesses the web.",
+    web_access: bool = Field(
+        default=False,
+        description="Whether the task is allowed to access the web.",
     )
 
 

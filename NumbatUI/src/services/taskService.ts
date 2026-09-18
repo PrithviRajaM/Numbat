@@ -9,14 +9,12 @@
 
 import { API_BASE_URL, USE_MOCK_AUTH } from '@/config';
 
-export type WebAccessMode = 'web_through_mcp' | 'no_web' | 'direct';
-
 /** The persisted task configuration (saved as TaskConfig.json). */
 export type TaskConfig = {
   name: string;
   frequency_in_minutes: number;
   enabled: boolean;
-  web_access_mode: WebAccessMode;
+  web_access: boolean;
 };
 
 /** Lightweight entry for the left-hand list. */
