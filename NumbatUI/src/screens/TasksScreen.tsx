@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
   },
   // Collapsed edit column rail.
   editRail: {
-    width: 40,
+    width: 80,
     alignItems: 'center',
     paddingHorizontal: spacing.md,
   },

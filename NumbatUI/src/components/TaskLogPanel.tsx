@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     color: colors.textOnLight,
   },
   toggle: {
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceMuted,
