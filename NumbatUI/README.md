@@ -1,10 +1,10 @@
-# NumbatUI (MyTeamGE)
+# NumbatUI (TGE)
 
 A cross-platform application built with **Expo + React Native + React Native Web**. The
 same codebase runs in the browser today and is ready to ship to **Android** and **iOS**
 with no rewrite.
 
-The home page replicates the MyTeamGE landing layout and captures a corporate email for
+The home page replicates the TGE landing layout and captures a corporate email for
 login. Login now calls the **NumbatAPI** backend (`POST /profile`) by default, with a mock
 implementation available for offline UI work.
 

@@ -17,7 +17,7 @@ type HomeScreenProps = {
 };
 
 /**
- * Home page. Replicates the MyTeamGE landing layout: branded header on a dark
+ * Home page. Replicates the TGE landing layout: branded header on a dark
  * band, then a hero card with the email capture + login. The login is mocked
  * for now (see authService) and only accepts @teamglobalexp.com addresses.
  * On success it hands the email up so the app can show the Tasks screen.
@@ -75,7 +75,7 @@ export function HomeScreen({ onLoggedIn }: HomeScreenProps) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.hero}>
           <View style={styles.heroInner}>
-            <Text style={styles.eyebrow}>WELCOME TO MYTEAMGE LOCAL BOTS</Text>
+            <Text style={styles.eyebrow}>WELCOME TO TGE Kelpies</Text>
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Login</Text>

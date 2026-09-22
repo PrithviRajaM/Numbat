@@ -3,7 +3,7 @@
  *
  * These are intentionally plain values (no platform imports) so the exact same
  * theme drives the web, Android, and iOS builds. Colors are derived from the
- * MyTeamGE / Team Global Express brand: a lime-green accent on deep green.
+ * TGE / Team Global Express brand: a lime-green accent on deep green.
  */
 
 export const colors = {

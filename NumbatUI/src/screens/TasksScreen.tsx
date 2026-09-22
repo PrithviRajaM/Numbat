@@ -64,6 +64,8 @@ export function TasksScreen({ email }: TasksScreenProps) {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
+  // Tracks an in-flight "Stop Task" request so the button can show progress.
+  const [stopping, setStopping] = useState(false);
   // Controls the delete-confirmation dialog and the in-flight delete request.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -181,6 +183,20 @@ export function TasksScreen({ email }: TasksScreenProps) {
     }
     setStatus({ kind: 'idle', message: '' });
     const result = await taskService.runNow(email, selected);
+    setStatus({
+      kind: result.success ? 'success' : 'error',
+      message: result.message,
+    });
+  };
+
+  const handleStopTask = async () => {
+    if (!selected) {
+      return;
+    }
+    setStopping(true);
+    setStatus({ kind: 'idle', message: '' });
+    const result = await taskService.stopTask(email, selected);
+    setStopping(false);
     setStatus({
       kind: result.success ? 'success' : 'error',
       message: result.message,
@@ -329,8 +345,16 @@ export function TasksScreen({ email }: TasksScreenProps) {
                       label="Run Now"
                       variant="secondary"
                       onPress={() => void handleRunNow()}
-                      disabled={saving || !selected}
+                      disabled={saving || stopping || !selected}
                       style={styles.runNowButton}
+                    />
+                    <Button
+                      label="Stop Task"
+                      variant="secondary"
+                      onPress={() => void handleStopTask()}
+                      disabled={saving || stopping || !selected}
+                      loading={stopping}
+                      style={[styles.runNowButton, styles.stopTaskButton]}
                     />
                     <Pressable
                       onPress={() => {
@@ -737,6 +761,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
     paddingVertical: 2,
     paddingHorizontal: spacing.sm,
+  },
+  stopTaskButton: {
+    borderColor: colors.danger,
   },
   fieldSpacing: {
     marginBottom: spacing.sm,

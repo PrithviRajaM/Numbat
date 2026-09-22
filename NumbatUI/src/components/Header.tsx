@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, fontSizes, layout, spacing } from '@/theme';
 
 /**
- * Top navigation replicating the MyTeamGE template:
+ * Top navigation replicating the TGE template:
  *  - a dark header bar containing the logo
  */
 export function Header() {
@@ -14,8 +14,7 @@ export function Header() {
       <View style={styles.headerBar}>
         <View style={styles.headerBarInner}>
           <View style={styles.logoWrap}>
-            <Text style={styles.logoMark}>my</Text>
-            <Text style={styles.logoText}>TeamGE Local Bots</Text>
+            <Text style={styles.logoText}>TGE Kelpies</Text>
           </View>
         </View>
       </View>

@@ -45,5 +45,5 @@ export const config = {
   allowedEmailDomain: ALLOWED_EMAIL_DOMAIN,
   apiBaseUrl: API_BASE_URL,
   useMockAuth: USE_MOCK_AUTH,
-  appName: 'MyTeamGE',
+  appName: 'TGE',
 } as const;

@@ -43,6 +43,11 @@ export type RunTaskResult = {
   message: string;
 };
 
+export type StopTaskResult = {
+  success: boolean;
+  message: string;
+};
+
 export type DeleteTaskResult = {
   success: boolean;
   message: string;
@@ -70,6 +75,7 @@ export interface TaskService {
     createOnly?: boolean,
   ): Promise<SaveTaskResult>;
   runNow(email: string, name: string): Promise<RunTaskResult>;
+  stopTask(email: string, name: string): Promise<StopTaskResult>;
   deleteTask(email: string, name: string): Promise<DeleteTaskResult>;
 }
 
@@ -197,6 +203,35 @@ export class HttpTaskService implements TaskService {
     };
   }
 
+  async stopTask(email: string, name: string): Promise<StopTaskResult> {
+    let response: Response;
+    try {
+      response = await fetch(
+        `${this.baseUrl}/tasks/${encodeURIComponent(name)}/stop`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ email }),
+        },
+      );
+    } catch {
+      return { success: false, message: 'Cannot reach the server.' };
+    }
+
+    if (!response.ok) {
+      return { success: false, message: await errorDetail(response) };
+    }
+
+    const data = await safeJson<{ message: string }>(response);
+    return {
+      success: true,
+      message: data?.message ?? `Task '${name}' stopped.`,
+    };
+  }
+
   async deleteTask(email: string, name: string): Promise<DeleteTaskResult> {
     let response: Response;
     try {
@@ -281,7 +316,15 @@ export class MockTaskService implements TaskService {
 
   async runNow(_email: string, name: string): Promise<RunTaskResult> {
     await delay(150);
-    return { success: true, message: `Run requested for '${name}' (mock)` };
+    return { success: true, message: `Task Execution Status '${name}' (mock)` };
+  }
+
+  async stopTask(email: string, name: string): Promise<StopTaskResult> {
+    await delay(150);
+    if (!this.bucket(email).has(name)) {
+      return { success: false, message: `Task '${name}' not found` };
+    }
+    return { success: true, message: `Task '${name}' stopped (mock)` };
   }
 
   async deleteTask(email: string, name: string): Promise<DeleteTaskResult> {
