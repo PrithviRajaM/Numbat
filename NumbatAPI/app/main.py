@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .models import (
+    DeleteTaskResponse,
     LogLinesResponse,
     LogRunListResponse,
     ProfileRequest,
@@ -27,6 +28,7 @@ from .services import (
     ProfileNotFoundError,
     TaskExistsError,
     TaskNotFoundError,
+    delete_task,
     get_log_run_lines,
     get_task,
     list_log_runs,
@@ -141,6 +143,28 @@ def create_or_update_task(payload: SaveTaskRequest) -> SaveTaskResponse:
         f"Task '{name}' created" if created else f"Task '{name}' updated"
     )
     return SaveTaskResponse(message=message, name=name, created=created)
+
+
+@app.delete("/tasks/{task_name}", response_model=DeleteTaskResponse)
+def delete_task_by_name(task_name: str, email: str) -> DeleteTaskResponse:
+    """Soft-delete a task by suffixing its folder name with ``_DELETED``.
+
+    The folder is renamed rather than removed, so it is hidden from listings and
+    its original name can be reused. If a matching ``_DELETED`` folder already
+    exists, it is hard-deleted first.
+
+    - `email`: the owning user (query parameter).
+    - 400 if the email domain is not allowed.
+    - 404 if the profile or task does not exist.
+    """
+    try:
+        name = delete_task(email, task_name)
+    except DomainNotAllowedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (ProfileNotFoundError, TaskNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return DeleteTaskResponse(message=f"Task '{name}' deleted", name=name)
 
 
 @app.post("/tasks/{task_name}/run", response_model=RunTaskResponse)

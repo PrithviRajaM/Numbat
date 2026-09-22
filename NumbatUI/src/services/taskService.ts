@@ -14,7 +14,9 @@ export type TaskConfig = {
   name: string;
   frequency_in_minutes: number;
   enabled: boolean;
-  web_access: boolean;
+  web_extract: boolean;
+  /** URLs to extract from, separated by ';' or ','. Saved regardless of web_extract. */
+  web_urls: string;
 };
 
 /** Lightweight entry for the left-hand list. */
@@ -41,6 +43,11 @@ export type RunTaskResult = {
   message: string;
 };
 
+export type DeleteTaskResult = {
+  success: boolean;
+  message: string;
+};
+
 export type ListTasksResult = {
   success: boolean;
   message: string;
@@ -63,6 +70,7 @@ export interface TaskService {
     createOnly?: boolean,
   ): Promise<SaveTaskResult>;
   runNow(email: string, name: string): Promise<RunTaskResult>;
+  deleteTask(email: string, name: string): Promise<DeleteTaskResult>;
 }
 
 type ErrorResponse = { detail?: string };
@@ -188,6 +196,31 @@ export class HttpTaskService implements TaskService {
       message: data?.message ?? 'Run requested.',
     };
   }
+
+  async deleteTask(email: string, name: string): Promise<DeleteTaskResult> {
+    let response: Response;
+    try {
+      response = await fetch(
+        `${this.baseUrl}/tasks/${encodeURIComponent(name)}?email=${encodeURIComponent(email)}`,
+        {
+          method: 'DELETE',
+          headers: { Accept: 'application/json' },
+        },
+      );
+    } catch {
+      return { success: false, message: 'Cannot reach the server.' };
+    }
+
+    if (!response.ok) {
+      return { success: false, message: await errorDetail(response) };
+    }
+
+    const data = await safeJson<{ message: string }>(response);
+    return {
+      success: true,
+      message: data?.message ?? `Task '${name}' deleted.`,
+    };
+  }
 }
 
 /** In-memory mock. Persists tasks per email for the lifetime of the app. */
@@ -249,6 +282,16 @@ export class MockTaskService implements TaskService {
   async runNow(_email: string, name: string): Promise<RunTaskResult> {
     await delay(150);
     return { success: true, message: `Run requested for '${name}' (mock)` };
+  }
+
+  async deleteTask(email: string, name: string): Promise<DeleteTaskResult> {
+    await delay(200);
+    const bucket = this.bucket(email);
+    if (!bucket.has(name)) {
+      return { success: false, message: `Task '${name}' not found` };
+    }
+    bucket.delete(name);
+    return { success: true, message: `Task '${name}' deleted (mock)` };
   }
 }
 

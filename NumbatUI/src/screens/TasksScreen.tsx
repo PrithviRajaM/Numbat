@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,12 @@ import {
   taskService,
 } from '@/services/taskService';
 import { colors, fontSizes, radius, spacing } from '@/theme';
-import { FieldErrors, validateTaskConfig } from '@/utils/validation';
+import {
+  FieldErrors,
+  splitWebUrls,
+  validateTaskConfig,
+  validateWebUrls,
+} from '@/utils/validation';
 
 type StatusKind = 'idle' | 'success' | 'error';
 
@@ -33,7 +39,8 @@ const EMPTY_FORM = {
   name: '',
   frequency: '1',
   enabled: true,
-  webAccess: false,
+  webExtract: false,
+  webUrls: '',
   prompt: '',
 };
 
@@ -57,6 +64,9 @@ export function TasksScreen({ email }: TasksScreenProps) {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
+  // Controls the delete-confirmation dialog and the in-flight delete request.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [status, setStatus] = useState<{ kind: StatusKind; message: string }>({
     kind: 'idle',
     message: '',
@@ -107,7 +117,8 @@ export function TasksScreen({ email }: TasksScreenProps) {
         name: config.name,
         frequency: String(config.frequency_in_minutes),
         enabled: config.enabled,
-        webAccess: config.web_access,
+        webExtract: config.web_extract,
+        webUrls: config.web_urls ?? '',
         prompt,
       });
     } else {
@@ -120,6 +131,11 @@ export function TasksScreen({ email }: TasksScreenProps) {
       name: form.name,
       frequency: form.frequency,
     });
+    // URLs are optional but, when present, must be well-formed.
+    const urlError = validateWebUrls(form.webUrls);
+    if (urlError) {
+      fieldErrors.webUrls = urlError;
+    }
     setErrors(fieldErrors);
     if (Object.keys(fieldErrors).length > 0) {
       setStatus({ kind: 'idle', message: '' });
@@ -130,7 +146,10 @@ export function TasksScreen({ email }: TasksScreenProps) {
       name: form.name.trim(),
       frequency_in_minutes: Number(form.frequency.trim()),
       enabled: form.enabled,
-      web_access: form.webAccess,
+      web_extract: form.webExtract,
+      // Persist the URLs regardless of the Web Extract toggle. Normalise the
+      // separators to a single '; ' for a tidy, consistent stored value.
+      web_urls: splitWebUrls(form.webUrls).join('; '),
     };
 
     // When no task is selected we are creating: ask the backend to reject a
@@ -166,6 +185,27 @@ export function TasksScreen({ email }: TasksScreenProps) {
       kind: result.success ? 'success' : 'error',
       message: result.message,
     });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selected) {
+      setConfirmingDelete(false);
+      return;
+    }
+    setDeleting(true);
+    setStatus({ kind: 'idle', message: '' });
+    const result = await taskService.deleteTask(email, selected);
+    setDeleting(false);
+    setConfirmingDelete(false);
+
+    if (result.success) {
+      // The task is gone: drop back to create mode and refresh the list.
+      handleClear();
+      setStatus({ kind: 'success', message: result.message });
+      await refreshList();
+    } else {
+      setStatus({ kind: 'error', message: result.message });
+    }
   };
 
   const update = <K extends keyof typeof form>(
@@ -345,15 +385,43 @@ export function TasksScreen({ email }: TasksScreenProps) {
                 </View>
 
                 <View style={[styles.fieldSpacing, styles.switchRow]}>
-                  <Text style={styles.switchLabel}>Web Access</Text>
+                  <Text style={styles.switchLabel}>Web Extract</Text>
                   <Switch
-                    value={form.webAccess}
-                    onValueChange={(v) => update('webAccess', v)}
+                    value={form.webExtract}
+                    onValueChange={(v) => update('webExtract', v)}
                     disabled={saving}
                     trackColor={{ true: colors.brandLime, false: colors.border }}
                     thumbColor={colors.surface}
                   />
                 </View>
+
+                {/*
+                  URL text area sits between the Web Extract toggle and the rest
+                  of the form. Visibility/enabled state depend on the toggle:
+                    - toggle ON  -> shown and editable
+                    - toggle OFF + has URLs -> shown but disabled
+                    - toggle OFF + empty     -> hidden
+                */}
+                {form.webExtract || form.webUrls.trim().length > 0 ? (
+                  <View style={styles.fieldSpacing}>
+                    <TextArea
+                      label="Web URLs"
+                      value={form.webUrls}
+                      onChangeText={(t) => {
+                        update('webUrls', t);
+                        // Validate as the user types.
+                        setErrors((prev) => ({
+                          ...prev,
+                          webUrls: validateWebUrls(t) || undefined,
+                        }));
+                      }}
+                      placeholder="https://example.com; https://another.com"
+                      error={errors.webUrls}
+                      editable={!saving && form.webExtract}
+                      rows={3}
+                    />
+                  </View>
+                ) : null}
               </View>
 
               {/* Task Prompt section (now below Task Config) */}
@@ -382,8 +450,18 @@ export function TasksScreen({ email }: TasksScreenProps) {
                   label="Clear"
                   variant="secondary"
                   onPress={handleClear}
-                  disabled={saving}
+                  disabled={saving || deleting}
                   style={styles.actionButton}
+                />
+                <Button
+                  label="Delete"
+                  variant="secondary"
+                  onPress={() => setConfirmingDelete(true)}
+                  // In create mode no task is selected, so there is nothing to
+                  // delete: keep the action disabled.
+                  disabled={saving || deleting || !selected}
+                  loading={deleting}
+                  style={[styles.actionButton, styles.deleteButton]}
                 />
               </View>
 
@@ -424,6 +502,43 @@ export function TasksScreen({ email }: TasksScreenProps) {
           </View>
         </View>
       </View>
+
+      {/* Delete confirmation dialog. Works on web and native via Modal. */}
+      <Modal
+        visible={confirmingDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!deleting) {
+            setConfirmingDelete(false);
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete task</Text>
+            <Text style={styles.modalMessage}>
+              {`Are you sure you want to delete "${selected ?? ''}"? This action cannot be undone.`}
+            </Text>
+            <View style={styles.modalActions}>
+              <Button
+                label="Cancel"
+                variant="secondary"
+                onPress={() => setConfirmingDelete(false)}
+                disabled={deleting}
+                style={styles.modalButton}
+              />
+              <Button
+                label="Delete"
+                variant="primary"
+                onPress={() => void handleConfirmDelete()}
+                loading={deleting}
+                style={[styles.modalButton, styles.deleteButton]}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -656,5 +771,42 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  deleteButton: {
+    borderColor: colors.danger,
+  },
+  // Delete confirmation dialog.
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  modalTitle: {
+    fontSize: fontSizes.lg,
+    fontWeight: '800',
+    color: colors.textOnLight,
+    marginBottom: spacing.sm,
+  },
+  modalMessage: {
+    fontSize: fontSizes.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  modalButton: {
+    minWidth: 110,
   },
 });

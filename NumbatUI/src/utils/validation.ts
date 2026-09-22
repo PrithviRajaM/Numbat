@@ -54,12 +54,50 @@ const TASK_NAME_SHAPE = /^[A-Za-z0-9][A-Za-z0-9 _-]*$/;
 export type FieldErrors = {
   name?: string;
   frequency?: string;
+  webUrls?: string;
 };
 
 export type TaskConfigInput = {
   name: string;
   frequency: string;
 };
+
+// A pragmatic http(s) URL shape check. Requires a scheme and a host; keeps the
+// rest permissive so query strings and paths pass without fuss.
+const URL_SHAPE = /^https?:\/\/[^\s/$.?#][^\s]*$/i;
+
+/**
+ * Splits a raw string of URLs on ';' or ',' and trims each entry, dropping
+ * empty segments (so trailing separators are tolerated).
+ */
+export function splitWebUrls(raw: string): string[] {
+  return raw
+    .split(/[;,]/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+/**
+ * Validates a string of one or more URLs separated by ';' or ','.
+ *
+ * An empty (or whitespace-only) value is considered valid: URLs are optional.
+ * Otherwise every non-empty segment must be a well-formed http(s) URL.
+ *
+ * Returns a human-readable message when invalid; empty string when valid.
+ */
+export function validateWebUrls(raw: string): string {
+  const urls = splitWebUrls(raw);
+  if (urls.length === 0) {
+    return '';
+  }
+
+  const invalid = urls.filter((url) => !URL_SHAPE.test(url));
+  if (invalid.length > 0) {
+    return `Enter valid http(s) URLs separated by ';' or ',': ${invalid.join(', ')}`;
+  }
+
+  return '';
+}
 
 /**
  * Validates the Task Config fields.
