@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -31,6 +31,12 @@ type LinesState = {
 
 const runKey = (date: string, runId: number) => `${date}#${runId}`;
 
+/** Selectable auto-refresh intervals, in seconds. */
+const REFRESH_INTERVALS = [5, 10, 15, 30, 45, 60] as const;
+
+/** Default auto-refresh interval, in seconds. */
+const DEFAULT_REFRESH_INTERVAL = 60;
+
 /**
  * Right-hand panel of the Edit Task view. Renders a collapsible tree:
  *   date (newest -> oldest)
@@ -61,6 +67,16 @@ export function TaskLogPanel({
   // Lazily-loaded log lines per run.
   const [lines, setLines] = useState<Record<string, LinesState>>({});
 
+  // Auto-refresh: selected interval (seconds), seconds remaining, and whether
+  // the interval dropdown is open.
+  const [refreshInterval, setRefreshInterval] = useState<number>(
+    DEFAULT_REFRESH_INTERVAL,
+  );
+  const [secondsLeft, setSecondsLeft] = useState<number>(
+    DEFAULT_REFRESH_INTERVAL,
+  );
+  const [intervalMenuOpen, setIntervalMenuOpen] = useState(false);
+
   const loadRuns = useCallback(async () => {
     if (!taskName) {
       setDates([]);
@@ -86,6 +102,33 @@ export function TaskLogPanel({
     setLines({});
     void loadRuns();
   }, [loadRuns]);
+
+  // Keep a stable ref to the latest loadRuns so the countdown tick can trigger
+  // a refresh without restarting the timer on every re-render.
+  const loadRunsRef = useRef(loadRuns);
+  useEffect(() => {
+    loadRunsRef.current = loadRuns;
+  }, [loadRuns]);
+
+  // Auto-refresh countdown. Ticks once per second; when it reaches zero it
+  // triggers the same action as the Refresh button, then restarts from the
+  // currently selected interval. Only runs while a task is selected.
+  useEffect(() => {
+    if (!taskName) {
+      return;
+    }
+    setSecondsLeft(refreshInterval);
+    const id = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          void loadRunsRef.current();
+          return refreshInterval;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [taskName, refreshInterval]);
 
   const toggleDate = (date: string) => {
     setOpenDates((prev) => {
@@ -152,13 +195,79 @@ export function TaskLogPanel({
         <Text style={styles.title}>Task Log</Text>
         <View style={styles.headerActions}>
           {taskName ? (
-            <Pressable
-              onPress={() => void loadRuns()}
-              accessibilityRole="button"
-              accessibilityLabel="Refresh logs"
-            >
-              <Text style={styles.refresh}>Refresh</Text>
-            </Pressable>
+            <>
+              <Pressable
+                onPress={() => {
+                  setSecondsLeft(refreshInterval);
+                  void loadRuns();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Refresh logs"
+              >
+                <Text style={styles.refresh}>Refresh</Text>
+              </Pressable>
+
+              <View
+                style={styles.countdownCircle}
+                accessibilityLabel={`Auto refresh in ${secondsLeft} seconds`}
+              >
+                <Text style={styles.countdownArrow}>↻</Text>
+                <Text style={styles.countdownText}>{secondsLeft}</Text>
+              </View>
+
+              <View style={styles.intervalWrap}>
+                {/* <Text style={styles.intervalLabel}>Interval (s)</Text> */}
+                <Pressable
+                  onPress={() => setIntervalMenuOpen((open) => !open)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select refresh interval in seconds"
+                  accessibilityState={{ expanded: intervalMenuOpen }}
+                  style={styles.intervalSelect}
+                >
+                  <Text style={styles.intervalSelectText}>
+                    {refreshInterval}
+                  </Text>
+                  <Text style={styles.intervalChevron}>
+                    {intervalMenuOpen ? '▲' : '▼'}
+                  </Text>
+                </Pressable>
+
+                {intervalMenuOpen ? (
+                  <View style={styles.intervalMenu}>
+                    {REFRESH_INTERVALS.map((value) => {
+                      const selected = value === refreshInterval;
+                      return (
+                        <Pressable
+                          key={value}
+                          onPress={() => {
+                            setRefreshInterval(value);
+                            setSecondsLeft(value);
+                            setIntervalMenuOpen(false);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          style={[
+                            styles.intervalOption,
+                            selected ? styles.intervalOptionSelected : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.intervalOptionText,
+                              selected
+                                ? styles.intervalOptionTextSelected
+                                : null,
+                            ]}
+                          >
+                            {value}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            </>
           ) : null}
           <Pressable
             onPress={onToggleCollapsed}
@@ -286,11 +395,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
+    // Keep the header (and its dropdown menu) above the log list below.
+    zIndex: 20,
+    elevation: 20,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    zIndex: 20,
   },
   title: {
     fontSize: fontSizes.sm,
@@ -335,6 +447,96 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     fontWeight: '700',
     color: colors.brandGreenDark,
+    marginRight: 15,
+  },
+  countdownCircle: {
+    width: 25,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countdownArrow: {
+    ...StyleSheet.absoluteFillObject,
+    textAlign: 'center',
+    textAlignVertical: 'auto',
+    lineHeight: 47,
+    fontSize: 30,
+    fontWeight: '400',
+    color: colors.brandGreenDark,
+  },
+  countdownText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.brandGreenDark,
+  },
+  intervalWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    position: 'relative',
+    zIndex: 30,
+    marginRight:12,
+  },
+  intervalLabel: {
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+    color: colors.textMuted,
+    // Match the select's border + vertical padding so the label baseline
+    // lines up with the value inside the dropdown box.
+    paddingVertical: 3,
+  },
+  intervalSelect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+  },
+  intervalSelectText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textOnLight,
+  },
+  intervalChevron: {
+    fontSize: fontSizes.xs,
+    color: colors.textMuted,
+  },
+  intervalMenu: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    marginTop: spacing.xs,
+    minWidth: 56,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.xs,
+    zIndex: 100,
+    elevation: 100,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  intervalOption: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  intervalOptionSelected: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  intervalOptionText: {
+    fontSize: fontSizes.sm,
+    color: colors.textOnLight,
+  },
+  intervalOptionTextSelected: {
+    fontWeight: '800',
+    color: colors.brandGreenDark,
   },
   hint: {
     fontSize: fontSizes.sm,
@@ -357,6 +559,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
+    zIndex: 0,
   },
   scrollContent: {
     paddingBottom: spacing.md,

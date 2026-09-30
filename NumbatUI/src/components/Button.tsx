@@ -96,6 +96,6 @@ const styles = StyleSheet.create({
     color: colors.brandGreenDark,
   },
   labelSecondary: {
-    color: colors.brandLime,
+    color: 'rgb(20, 50, 0)',
   },
 });
