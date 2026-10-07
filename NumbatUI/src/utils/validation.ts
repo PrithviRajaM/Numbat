@@ -67,18 +67,18 @@ export type TaskConfigInput = {
 const URL_SHAPE = /^https?:\/\/[^\s/$.?#][^\s]*$/i;
 
 /**
- * Splits a raw string of URLs on ';' or ',' and trims each entry, dropping
- * empty segments (so trailing separators are tolerated).
+ * Splits a raw string of URLs on commas and/or whitespace and trims each
+ * entry, dropping empty segments (so trailing separators are tolerated).
  */
 export function splitWebUrls(raw: string): string[] {
   return raw
-    .split(/[;,]/)
+    .split(/[,\s]+/)
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
 }
 
 /**
- * Validates a string of one or more URLs separated by ';' or ','.
+ * Validates a string of one or more URLs separated by a comma and/or space.
  *
  * An empty (or whitespace-only) value is considered valid: URLs are optional.
  * Otherwise every non-empty segment must be a well-formed http(s) URL.
@@ -93,7 +93,7 @@ export function validateWebUrls(raw: string): string {
 
   const invalid = urls.filter((url) => !URL_SHAPE.test(url));
   if (invalid.length > 0) {
-    return `Enter valid http(s) URLs separated by ';' or ',': ${invalid.join(', ')}`;
+    return `Enter valid http(s) URLs separated by a comma or space: ${invalid.join(', ')}`;
   }
 
   return '';

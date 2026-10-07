@@ -100,8 +100,10 @@ Verify it's up:
 
 Backend configuration (optional, set before starting):
 
+
 | Variable                | Default             | Meaning                          |
-| ----------------------- | ------------------- | -------------------------------- |
+| ----------------------- | ------------------- 
+| -------------------------------- |
 | `NUMBAT_DATA_ROOT`      | `D:\Data\Numbat`    | Root folder for profile folders  |
 | `NUMBAT_ALLOWED_DOMAIN` | `teamglobalexp.com` | Email domain allowed to register |
 

@@ -46,7 +46,7 @@ class TaskConfig(BaseModel):
     web_urls: str = Field(
         default="",
         description=(
-            "One or more URLs to extract from, separated by ';' or ','. "
+            "One or more URLs to extract from, separated by a comma or space. "
             "Persisted regardless of the web_extract flag."
         ),
     )
@@ -72,6 +72,13 @@ class TaskSummary(BaseModel):
 
     name: str
     enabled: bool
+    in_progress: bool = Field(
+        default=False,
+        description=(
+            "True when the task has a non-empty 'InProgress' folder, i.e. a "
+            "run is currently staged/running and can be stopped."
+        ),
+    )
 
 
 class TaskListResponse(BaseModel):

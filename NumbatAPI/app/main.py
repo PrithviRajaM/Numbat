@@ -259,3 +259,25 @@ def get_task_log_run_lines(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return LogLinesResponse(date=date, task_run_id=task_run_id, lines=lines)
+
+
+def main() -> None:
+    """Run the API with uvicorn using the project's default settings.
+
+    Host, port and reload can be overridden via environment variables:
+    ``NUMBAT_HOST``, ``NUMBAT_PORT``, ``NUMBAT_RELOAD``.
+    """
+    import os
+
+    import uvicorn
+
+    host = os.getenv("NUMBAT_HOST", "127.0.0.1")
+    port = int(os.getenv("NUMBAT_PORT", "7531"))
+    reload = os.getenv("NUMBAT_RELOAD", "true").lower() in {"1", "true", "yes"}
+
+    # Pass the app as an import string so --reload works.
+    uvicorn.run("app.main:app", host=host, port=port, reload=reload)
+
+
+if __name__ == "__main__":
+    main()

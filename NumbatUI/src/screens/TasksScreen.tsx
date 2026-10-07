@@ -150,8 +150,8 @@ export function TasksScreen({ email }: TasksScreenProps) {
       enabled: form.enabled,
       web_extract: form.webExtract,
       // Persist the URLs regardless of the Web Extract toggle. Normalise the
-      // separators to a single '; ' for a tidy, consistent stored value.
-      web_urls: splitWebUrls(form.webUrls).join('; '),
+      // separators to a single ', ' for a tidy, consistent stored value.
+      web_urls: splitWebUrls(form.webUrls).join(', '),
     };
 
     // When no task is selected we are creating: ask the backend to reject a
@@ -187,6 +187,11 @@ export function TasksScreen({ email }: TasksScreenProps) {
       kind: result.success ? 'success' : 'error',
       message: result.message,
     });
+    // Refresh so the in-progress flag updates and the buttons flip
+    // (Run Now -> disabled, Stop Task -> enabled).
+    if (result.success) {
+      await refreshList();
+    }
   };
 
   const handleStopTask = async () => {
@@ -201,6 +206,11 @@ export function TasksScreen({ email }: TasksScreenProps) {
       kind: result.success ? 'success' : 'error',
       message: result.message,
     });
+    // Refresh so the in-progress flag clears and the buttons flip back
+    // (Stop Task -> disabled, Run Now -> enabled).
+    if (result.success) {
+      await refreshList();
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -230,6 +240,13 @@ export function TasksScreen({ email }: TasksScreenProps) {
   ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
+
+  // Whether the selected task currently has in-progress work (a non-empty
+  // `InProgress` folder on the backend). Drives the Run Now / Stop Task toggle:
+  // only one of the two buttons is ever enabled.
+  const selectedInProgress = selected
+    ? (tasks.find((t) => t.name === selected)?.in_progress ?? false)
+    : false;
 
   return (
     <View style={styles.root}>
@@ -345,14 +362,21 @@ export function TasksScreen({ email }: TasksScreenProps) {
                       label="Run Now"
                       variant="secondary"
                       onPress={() => void handleRunNow()}
-                      disabled={saving || stopping || !selected}
+                      // Enabled only when a task is selected and has no
+                      // in-progress work to stop.
+                      disabled={
+                        saving || stopping || !selected || selectedInProgress
+                      }
                       style={styles.runNowButton}
                     />
                     <Button
                       label="Stop Task"
                       variant="secondary"
                       onPress={() => void handleStopTask()}
-                      disabled={saving || stopping || !selected}
+                      // Enabled only when the selected task has in-progress work.
+                      disabled={
+                        saving || stopping || !selected || !selectedInProgress
+                      }
                       loading={stopping}
                       style={[styles.runNowButton, styles.stopTaskButton]}
                     />
@@ -439,7 +463,7 @@ export function TasksScreen({ email }: TasksScreenProps) {
                           webUrls: validateWebUrls(t) || undefined,
                         }));
                       }}
-                      placeholder="https://example.com; https://another.com"
+                      placeholder="https://example.com, https://another.com"
                       error={errors.webUrls}
                       editable={!saving && form.webExtract}
                       rows={3}

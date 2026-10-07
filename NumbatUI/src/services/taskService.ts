@@ -15,7 +15,7 @@ export type TaskConfig = {
   frequency_in_minutes: number;
   enabled: boolean;
   web_extract: boolean;
-  /** URLs to extract from, separated by ';' or ','. Saved regardless of web_extract. */
+  /** URLs to extract from, separated by a comma or space. Saved regardless of web_extract. */
   web_urls: string;
 };
 
@@ -23,6 +23,12 @@ export type TaskConfig = {
 export type TaskSummary = {
   name: string;
   enabled: boolean;
+  /**
+   * True when the task has a non-empty `InProgress` folder on the backend, i.e.
+   * a run is currently staged/running and can be stopped. When false there is
+   * nothing to stop, so "Run Now" is the active action.
+   */
+  in_progress: boolean;
 };
 
 /** Full task detail: config plus prompt text. */
@@ -261,6 +267,10 @@ export class HttpTaskService implements TaskService {
 /** In-memory mock. Persists tasks per email for the lifetime of the app. */
 export class MockTaskService implements TaskService {
   private readonly store = new Map<string, Map<string, TaskDetail>>();
+  // Mirrors the backend's `InProgress` folder: the set of task names (per
+  // email) that currently have staged/running work. `runNow` adds to it and
+  // `stopTask` clears it, so the Run Now / Stop Task buttons toggle offline.
+  private readonly inProgress = new Map<string, Set<string>>();
 
   private bucket(email: string): Map<string, TaskDetail> {
     let b = this.store.get(email);
@@ -271,10 +281,24 @@ export class MockTaskService implements TaskService {
     return b;
   }
 
+  private running(email: string): Set<string> {
+    let s = this.inProgress.get(email);
+    if (!s) {
+      s = new Set();
+      this.inProgress.set(email, s);
+    }
+    return s;
+  }
+
   async listTasks(email: string): Promise<ListTasksResult> {
     await delay(200);
+    const running = this.running(email);
     const tasks = Array.from(this.bucket(email).values())
-      .map((d) => ({ name: d.config.name, enabled: d.config.enabled }))
+      .map((d) => ({
+        name: d.config.name,
+        enabled: d.config.enabled,
+        in_progress: running.has(d.config.name),
+      }))
       .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
     return { success: true, message: 'ok', tasks };
   }
@@ -314,8 +338,13 @@ export class MockTaskService implements TaskService {
     };
   }
 
-  async runNow(_email: string, name: string): Promise<RunTaskResult> {
+  async runNow(email: string, name: string): Promise<RunTaskResult> {
     await delay(150);
+    if (!this.bucket(email).has(name)) {
+      return { success: false, message: `Task '${name}' not found` };
+    }
+    // Mark the task in-progress so Stop Task becomes the active button.
+    this.running(email).add(name);
     return { success: true, message: `Task Execution Status '${name}' (mock)` };
   }
 
@@ -324,6 +353,8 @@ export class MockTaskService implements TaskService {
     if (!this.bucket(email).has(name)) {
       return { success: false, message: `Task '${name}' not found` };
     }
+    // Clear the in-progress flag so Run Now becomes active again.
+    this.running(email).delete(name);
     return { success: true, message: `Task '${name}' stopped (mock)` };
   }
 
@@ -334,6 +365,7 @@ export class MockTaskService implements TaskService {
       return { success: false, message: `Task '${name}' not found` };
     }
     bucket.delete(name);
+    this.running(email).delete(name);
     return { success: true, message: `Task '${name}' deleted (mock)` };
   }
 }

@@ -174,7 +174,7 @@ The task UI is `NumbatUI/src/screens/TasksScreen.tsx`, a two-column layout:
 - **Right panel** — a Create/Edit area containing:
   - **Task Config** section: `Name`, `Frequency (minutes)`, an **Enabled**
     toggle, a **Web Extract** toggle (boolean, saved as `true`/`false`), and a
-    **Web URLs** text area (one or more URLs separated by `;` or `,`). The text
+    **Web URLs** text area (one or more URLs separated by a comma or space). The text
     area is editable when Web Extract is on; when Web Extract is turned off it is
     disabled if it holds URLs and hidden if empty. Its value is saved as
     `web_urls` regardless of the toggle.

@@ -87,12 +87,47 @@ export function TaskLogPanel({
     setError(null);
     const result = await logService.listRuns(email, taskName);
     setLoading(false);
-    if (result.success) {
-      setDates(result.dates);
-    } else {
+    if (!result.success) {
       setDates([]);
       setError(result.message);
+      return;
     }
+
+    setDates(result.dates);
+
+    // After the listing loads, fetch the content of the latest run so the
+    // panel shows fresh log lines on every refresh (the Refresh button and the
+    // auto-refresh countdown both route through here). `dates` arrives newest
+    // -> oldest, and each date's `runs` are newest -> oldest, so the latest run
+    // is the first run of the first date.
+    const latestDate = result.dates[0];
+    const latestRun = latestDate?.runs[0];
+    if (!latestDate || !latestRun) {
+      return;
+    }
+
+    const key = runKey(latestDate.date, latestRun.task_run_id);
+
+    // Auto-expand the latest date + run so the refreshed lines are visible.
+    setOpenDates((prev) => new Set(prev).add(latestDate.date));
+    setOpenRuns((prev) => new Set(prev).add(key));
+
+    setLines((prev) => ({
+      ...prev,
+      [key]: { loading: true, lines: prev[key]?.lines },
+    }));
+    const lineResult = await logService.getLines(
+      email,
+      taskName,
+      latestDate.date,
+      latestRun.task_run_id,
+    );
+    setLines((prev) => ({
+      ...prev,
+      [key]: lineResult.success
+        ? { loading: false, lines: lineResult.lines }
+        : { loading: false, error: lineResult.message },
+    }));
   }, [email, taskName]);
 
   // Reset expand state whenever the task changes, then (re)load the listing.

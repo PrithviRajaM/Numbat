@@ -124,6 +124,19 @@ def _tasks_root(email: str) -> Path:
     return _profile_dir(email) / "Tasks"
 
 
+def _has_in_progress(task_dir: Path) -> bool:
+    """Return True when a task has in-progress work staged.
+
+    A task is considered in progress when its ``InProgress`` folder exists and
+    is not empty. An empty (or missing) folder means there is nothing to stop,
+    so ``Run Now`` should be the active action instead.
+    """
+    inprogress_dir = task_dir / INPROGRESS_DIRNAME
+    if not inprogress_dir.is_dir():
+        return False
+    return any(inprogress_dir.iterdir())
+
+
 def list_tasks(email: str) -> list[TaskSummary]:
     """List all tasks for a user.
 
@@ -161,7 +174,13 @@ def list_tasks(email: str) -> list[TaskSummary]:
             # Keep listing resilient: a malformed config still shows up.
             enabled = True
 
-        summaries.append(TaskSummary(name=entry.name, enabled=enabled))
+        summaries.append(
+            TaskSummary(
+                name=entry.name,
+                enabled=enabled,
+                in_progress=_has_in_progress(entry),
+            )
+        )
 
     return summaries
 
