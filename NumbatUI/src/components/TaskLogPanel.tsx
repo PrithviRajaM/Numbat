@@ -31,8 +31,35 @@ type LinesState = {
 
 const runKey = (date: string, runId: number) => `${date}#${runId}`;
 
-/** Selectable auto-refresh intervals, in seconds. */
-const REFRESH_INTERVALS = [5, 10, 15, 30, 45, 60] as const;
+/** Marker used to identify (and strip) user-facing log lines in brief mode. */
+const USER_MARKER = '[USER] ';
+
+/**
+ * In "Detailed" mode the lines are returned untouched. Otherwise only lines
+ * containing the `[USER]` marker are kept, each reduced to the text that
+ * follows `[USER] `.
+ */
+const filterLines = (lines: string[], detailed: boolean): string[] => {
+  if (detailed) {
+    return lines;
+  }
+  return lines
+    .filter((line) => line.includes(USER_MARKER))
+    .map((line) => line.slice(line.indexOf(USER_MARKER) + USER_MARKER.length));
+};
+
+/** Sentinel interval value that pauses the auto-refresh cycle. */
+const STOP_INTERVAL = 0;
+
+/**
+ * Selectable auto-refresh intervals, in seconds. `STOP_INTERVAL` (0) pauses the
+ * cycle and is rendered as "STOP" in the dropdown.
+ */
+const REFRESH_INTERVALS = [STOP_INTERVAL, 5, 10, 15, 30, 45, 60] as const;
+
+/** Label shown for an interval value in the select/dropdown. */
+const intervalLabel = (value: number) =>
+  value === STOP_INTERVAL ? 'STOP' : String(value);
 
 /** Default auto-refresh interval, in seconds. */
 const DEFAULT_REFRESH_INTERVAL = 60;
@@ -76,6 +103,10 @@ export function TaskLogPanel({
     DEFAULT_REFRESH_INTERVAL,
   );
   const [intervalMenuOpen, setIntervalMenuOpen] = useState(false);
+
+  // When false, log lines are filtered to show only '[USER]' lines, stripped
+  // down to the text that follows the '[USER] ' marker.
+  const [detailed, setDetailed] = useState(true);
 
   const loadRuns = useCallback(async () => {
     if (!taskName) {
@@ -149,7 +180,7 @@ export function TaskLogPanel({
   // triggers the same action as the Refresh button, then restarts from the
   // currently selected interval. Only runs while a task is selected.
   useEffect(() => {
-    if (!taskName) {
+    if (!taskName || refreshInterval === STOP_INTERVAL) {
       return;
     }
     setSecondsLeft(refreshInterval);
@@ -232,8 +263,33 @@ export function TaskLogPanel({
           {taskName ? (
             <>
               <Pressable
+                onPress={() => setDetailed((prev) => !prev)}
+                accessibilityRole="switch"
+                accessibilityLabel="Detailed logs"
+                accessibilityState={{ checked: detailed }}
+                style={styles.detailedToggle}
+              >
+                <Text style={styles.detailedToggleLabel}>Detailed</Text>
+                <View
+                  style={[
+                    styles.switchTrack,
+                    detailed ? styles.switchTrackOn : null,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.switchThumb,
+                      detailed ? styles.switchThumbOn : null,
+                    ]}
+                  />
+                </View>
+              </Pressable>
+
+              <Pressable
                 onPress={() => {
-                  setSecondsLeft(refreshInterval);
+                  if (refreshInterval !== STOP_INTERVAL) {
+                    setSecondsLeft(refreshInterval);
+                  }
                   void loadRuns();
                 }}
                 accessibilityRole="button"
@@ -244,10 +300,16 @@ export function TaskLogPanel({
 
               <View
                 style={styles.countdownCircle}
-                accessibilityLabel={`Auto refresh in ${secondsLeft} seconds`}
+                accessibilityLabel={
+                  refreshInterval === STOP_INTERVAL
+                    ? 'Auto refresh paused'
+                    : `Auto refresh in ${secondsLeft} seconds`
+                }
               >
                 <Text style={styles.countdownArrow}>↻</Text>
-                <Text style={styles.countdownText}>{secondsLeft}</Text>
+                <Text style={styles.countdownText}>
+                  {refreshInterval === STOP_INTERVAL ? '⏸' : secondsLeft}
+                </Text>
               </View>
 
               <View style={styles.intervalWrap}>
@@ -260,7 +322,7 @@ export function TaskLogPanel({
                   style={styles.intervalSelect}
                 >
                   <Text style={styles.intervalSelectText}>
-                    {refreshInterval}
+                    {intervalLabel(refreshInterval)}
                   </Text>
                   <Text style={styles.intervalChevron}>
                     {intervalMenuOpen ? '▲' : '▼'}
@@ -276,7 +338,9 @@ export function TaskLogPanel({
                           key={value}
                           onPress={() => {
                             setRefreshInterval(value);
-                            setSecondsLeft(value);
+                            if (value !== STOP_INTERVAL) {
+                              setSecondsLeft(value);
+                            }
                             setIntervalMenuOpen(false);
                           }}
                           accessibilityRole="button"
@@ -294,7 +358,7 @@ export function TaskLogPanel({
                                 : null,
                             ]}
                           >
-                            {value}
+                            {intervalLabel(value)}
                           </Text>
                         </Pressable>
                       );
@@ -380,20 +444,27 @@ export function TaskLogPanel({
                                 <Text style={styles.error}>
                                   {lineState.error}
                                 </Text>
-                              ) : lineState?.lines &&
-                                lineState.lines.length > 0 ? (
-                                lineState.lines.map((line, idx) => (
-                                  <Text
-                                    key={idx}
-                                    style={styles.logLine}
-                                    selectable
-                                  >
-                                    {line}
-                                  </Text>
-                                ))
-                              ) : (
-                                <Text style={styles.hint}>No lines.</Text>
-                              )}
+                              ) : (() => {
+                                const visibleLines = lineState?.lines
+                                  ? filterLines(lineState.lines, detailed)
+                                  : [];
+                                return visibleLines.length > 0 ? (
+                                  visibleLines
+                                    .map((line, idx) => ({ line, idx }))
+                                    .reverse()
+                                    .map(({ line, idx }) => (
+                                      <Text
+                                        key={idx}
+                                        style={styles.logLine}
+                                        selectable
+                                      >
+                                        {line}
+                                      </Text>
+                                    ))
+                                ) : (
+                                  <Text style={styles.hint}>No lines.</Text>
+                                );
+                              })()}
                             </View>
                           ) : null}
                         </View>
@@ -477,6 +548,41 @@ const styles = StyleSheet.create({
     color: colors.textOnLight,
     lineHeight: 16,
     textAlign: 'center',
+  },
+  detailedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginRight: 15,
+  },
+  detailedToggleLabel: {
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
+    color: colors.textOnLight,
+  },
+  switchTrack: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    padding: 2,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+  },
+  switchTrackOn: {
+    backgroundColor: colors.brandGreenDark,
+    borderColor: colors.brandGreenDark,
+  },
+  switchThumb: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.surface,
+    alignSelf: 'flex-start',
+  },
+  switchThumbOn: {
+    alignSelf: 'flex-end',
   },
   refresh: {
     fontSize: fontSizes.sm,
